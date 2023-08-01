@@ -8,6 +8,10 @@
 # User-specific files
 .Ruserdata
 
+# Specific files and directories
+/results/From Eric
+/data-raw/MS15.galaxy.alignments
+
 # Example code in package build process
 *-Ex.R
 
