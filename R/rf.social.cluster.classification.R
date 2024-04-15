@@ -4,34 +4,21 @@ library(randomForest)
 library(rfPermute)
 library(glmnet)
 
-samps.2.exclude <- c("z0132662","z0190864")
 min.cov <- 100
-description <- paste0("min.cov.",min.cov)
+meth.type <- "pct" # choose "pct", "pct.no.zero", or "logit"
+weighted <- TRUE
+description <- paste0(meth.type, ".min.cov.",min.cov)
 
-load(paste0("data/corrected.pct.meth.",description,".Rdata"))
-load("data/age.data.rda")
-load("data/sites.and.inds.from.Eric.rda")
-age.data <- filter(age.data, swfsc.labid %in% ids.to.keep)
-sites.2.keep <- gsub("_00", replacement = ".", sites.to.keep)
-sites.2.keep <- gsub("_0", replacement = ".", sites.2.keep)
-sites.2.keep <- gsub("_", replacement = ".", sites.2.keep)
-corrected.pct.meth <- select(corrected.pct.meth, sites.2.keep)
+dat <- combine.age.and.meth.data(description)
+all.samples <- dat.list$all.samples
+if (weighted) description <- paste0("weighted.", description)
+if(!weighted) all.samples$wt <- 1
+
 soc.clust.assignments <- read.csv("/Users/Shared/KKMDocuments/Documents/Github.Repos/Pcra/Pcra.database.data/data-raw/social.cluster.assignments.csv")
 names(soc.clust.assignments) <- c("crc.id","cluster.louvain")
 
-site.names <- names(corrected.pct.meth)
-corrected.pct.meth <- corrected.pct.meth[-which(rownames(corrected.pct.meth) %in% samps.2.exclude),]
-corrected.pct.meth <- cbind(id=rownames(corrected.pct.meth),corrected.pct.meth)
-names(age.data)[which(names(age.data) %in% c("swfsc.labid","age.best","age.confidence"))] <- c("id","age.point","confidence")
-age.data$numeric.sex <- 0
-age.data$numeric.sex[which(age.data$sex=="Female")] <- 1
-age.data$numeric.sex[which(age.data$sex=="Male")] <- 0
-age.data$decade <- floor(age.data$age.point/10)
-age.data$decade[which(age.data$decade>3)] <- 3
-first.meth.col <- dim(age.data)[2] + 1
-age.data <- left_join(age.data, soc.clust.assignments)
+all.samples <- left_join(all.samples, soc.clust.assignments)
 
-all.samples <- left_join(select(age.data, c(id, sex, cluster.louvain, decade)),corrected.pct.meth)
 data.complete <- all.samples#[-which(is.na(all.samples$cluster.louvain)),]
 data.complete$cluster.louvain <- factor(data.complete$cluster.louvain)
 data.complete$sex <- factor(data.complete$sex)
@@ -120,51 +107,19 @@ data.sex <- select(data.complete, -c(id, cluster.louvain, decade))
 freq <- table(data.sex$sex)
 sampsize <- rep(ceiling(min(freq / 2)), length(freq))
 
-rf.sex <- rfPermute(
+rf.sex <- randomForest(
   sex ~ .,
   data.sex,
   sampsize = sampsize,
   replace = FALSE,
   importance = TRUE,
   ntree = 100000,
-  keep.forest = FALSE,
-  nrep = 1000
+  keep.forest = FALSE
 )
-confusionMatrix(rf.sex)
-
-# Random Forest with predictors identified as significant (p < 0.05) by rfPermute
-imp <- importance(rf.sex)
-vars2keep <- c("sex",rownames(imp)[which(imp$MeanDecreaseGini.pval < 0.05)])
-
-data.important.predictors <- select(data.sex, all_of(vars2keep))
-rf.sex.imp <- rfPermute(
-  sex ~ .,
-  data.important.predictors,
-  sampsize = sampsize,
-  replace = FALSE,
-  importance = TRUE,
-  ntree = 100000,
-  keep.forest = FALSE,
-  nrep = 1000
-)
-
-# Random Forest with predictors chosen by glmnet
-load("results/glmnet.sex.model.rda")
-glmnet.age.vars[1] <- "sex"
-data.glmnet.predictors <- select(data.sex, all_of(glmnet.age.vars))
-rf.sex.glmnet.vars <- rfPermute(
-  sex ~ .,
-  data.glmnet.predictors,
-  sampsize = sampsize,
-  replace = FALSE,
-  importance = TRUE,
-  ntree = 100000,
-  keep.forest = FALSE,
-  nrep = 1000
-)
+write.csv(confusionMatrix(rf.sex), file = "results/rf.sex.confusion.matrix.csv")
 
 # Random Forest social cluster classification
-data.cluster <- select(data.complete, -c(id, sex, decade))
+data.cluster <- select(data.complete, -c(id, sex, decade)) %>% filter(!is.na(cluster.louvain))
 freq <- table(data.cluster$cluster.louvain)
 sampsize <- rep(ceiling(min(freq / 2)), length(freq))
 
@@ -177,6 +132,9 @@ rf.cluster <- randomForest(
   ntree = 100000,
   keep.forest = TRUE
 )
+write.csv(confusionMatrix(rf.cluster), file = "results/rf.cluster.confusion.matrix.csv")
+
+save(rf.cluster, rf.sex, file = "results/RF.sex.cluster.classification.rda")
 
 # Random Forest age decade classification
 data.decade <- select(data.complete, -c(id, sex, cluster.louvain))
@@ -192,5 +150,3 @@ rf.decade <- randomForest(
   ntree = 100000,
   keep.forest = TRUE
 )
-
-save(rf.cluster, rf.decade, rf.sex, file = "results/RF.sex.cluster.decade.classification.rda")
