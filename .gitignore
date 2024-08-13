@@ -11,6 +11,7 @@
 # Specific files and directories
 /results/From Eric
 /data-raw/MS15.galaxy.alignments
+/results/*stability*
 
 # Example code in package build process
 *-Ex.R

@@ -1,5 +1,5 @@
 combine.age.and.meth.data <- function(description){
-  load(paste0("data/corrected.meth.",description,".Rdata"))
+  load(paste0("data/corrected.meth_",description,".Rdata"))
   load("data/age.data.rda")
   load("data/sites.and.inds.from.Eric.rda")
   wts <- data.frame(age.confidence = 1:5, wt = c(0.05, 0.2, 0.55, 0.75, 1))

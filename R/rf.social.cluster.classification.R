@@ -3,23 +3,21 @@ library(dplyr)
 library(randomForest)
 library(rfPermute)
 library(glmnet)
+source("R/data.prep/combine.age.and.meth.data.R")
 
 min.cov <- 100
-meth.type <- "pct" # choose "pct", "pct.no.zero", or "logit"
-weighted <- TRUE
+meth.type <- "logit" # choose "pct", "pct.no.zero", or "logit"
 description <- paste0(meth.type, ".min.cov.",min.cov)
 
 dat <- combine.age.and.meth.data(description)
-all.samples <- dat.list$all.samples
-if (weighted) description <- paste0("weighted.", description)
-if(!weighted) all.samples$wt <- 1
+all.samples <- dat$all.samples
 
 soc.clust.assignments <- read.csv("/Users/Shared/KKMDocuments/Documents/Github.Repos/Pcra/Pcra.database.data/data-raw/social.cluster.assignments.csv")
 names(soc.clust.assignments) <- c("crc.id","cluster.louvain")
 
 all.samples <- left_join(all.samples, soc.clust.assignments)
 
-data.complete <- all.samples#[-which(is.na(all.samples$cluster.louvain)),]
+data.complete <- select(all.samples, c(id, sex, decade, cluster.louvain, all_of(dat$site.names)))
 data.complete$cluster.louvain <- factor(data.complete$cluster.louvain)
 data.complete$sex <- factor(data.complete$sex)
 data.complete$decade <- factor(data.complete$decade)
@@ -39,7 +37,7 @@ data.sex <- select(data.complete, -c(cluster.louvain, decade))
 data.sex$numeric.sex <- 0
 data.sex$numeric.sex[which(data.sex$sex=="Female")] <- 1
 
-x.meth <- as.matrix(select(data.sex, matches(site.names)))
+x.meth <- as.matrix(select(data.sex, matches(dat$site.names)))
 y.sex <- as.matrix(data.sex$numeric.sex)
 
 sex.alpha <- sapply(alpha.vals, function(a){
@@ -54,13 +52,13 @@ sex.best.alpha <- sex.alpha[1,which(sex.alpha[2,] == min(sex.alpha[2,]))]
 loov.sex.res <- do.call(rbind,lapply(data.sex$id, function(i){
   
   dat.loov <- data.sex[-which(data.sex$id == i),]
-  x.meth <- as.matrix(select(dat.loov, matches(site.names)))
+  x.meth <- as.matrix(select(dat.loov, matches(dat$site.names)))
   y.sex <- as.matrix(dat.loov$numeric.sex)
   
   cvfit <- cv.glmnet(x.meth,y.sex, alpha = sex.best.alpha, family = "binomial", type.measure = "class")
   #  corr.coef <- coef(cvfit, s = "lambda.min")
   oob.meth <- as.matrix(filter(data.sex, id == i) %>%
-                          select(matches(site.names)))
+                          select(matches(dat$site.names)))
   oob.sex <- data.sex$numeric.sex[which(data.sex$id == i)]
   predicted.sex <- predict(cvfit, oob.meth, type = "class", s = "lambda.min")
   return(c("sex" = oob.sex, "predicted.sex" = predicted.sex, "error" = (as.numeric(predicted.sex) - as.numeric(oob.sex))))
@@ -68,9 +66,10 @@ loov.sex.res <- do.call(rbind,lapply(data.sex$id, function(i){
 loov.sex.correct.assignment <- nrow(y.sex) - sum(abs(as.numeric(loov.sex.res$error)))
 
 # glmnet 10-fold cross volidation cluster prediction
-data.cluster <- select(data.complete, -c(sex, decade)) %>% filter(!is.na(cluster.louvain))
+data.cluster <- select(data.complete, -c(sex, decade)) %>% 
+  filter(!is.na(cluster.louvain)) 
 
-x.meth <- as.matrix(select(data.cluster, matches(site.names)))
+x.meth <- as.matrix(select(data.cluster, matches(dat$site.names)))
 y.cluster <- as.matrix(data.cluster$cluster.louvain)
 
 cluster.alpha <- sapply(alpha.vals, function(a){
@@ -85,20 +84,20 @@ cluster.best.alpha <- cluster.alpha[1,which(cluster.alpha[2,] == min(cluster.alp
 loov.clust.res <- do.call(rbind,lapply(data.cluster$id, function(i){
   
   dat.loov <- data.cluster[-which(data.cluster$id == i),]
-  x.meth <- as.matrix(select(dat.loov, matches(site.names)))
+  x.meth <- as.matrix(select(dat.loov, matches(dat$site.names)))
   y.clust <- as.matrix(dat.loov$cluster.louvain)
   
   cvfit <- cv.glmnet(x.meth,y.clust, alpha = cluster.best.alpha, family = "multinomial", type.measure = "class")
   #  corr.coef <- coef(cvfit, s = "lambda.min")
   oob.meth <- as.matrix(filter(data.cluster, id == i) %>%
-                          select(matches(site.names)))
+                          select(matches(dat$site.names)))
   oob.cluster <- data.cluster$cluster.louvain[which(data.cluster$id == i)]
   predicted.cluster <- predict(cvfit, oob.meth, type = "class", s = "lambda.min")
   return(c("cluster" = oob.cluster, "predicted.cluster" = predicted.cluster))
 })) %>% data.frame()
 loov.clust.errors <- length(which(loov.clust.res$cluster != loov.clust.res$predicted.cluster))
 loov.clust.confusion <- table(loov.clust.res)
-write.csv(loov.clust.confusion, file = "results/loov.cluster.confusion.matrix.csv")
+write.csv(loov.clust.confusion, file = "results-raw/loov.cluster.confusion.matrix.alpha5.csv")
 
 save(data.complete, sex.alpha, loov.sex.res, cluster.alpha, loov.clust.res, file = "results/glmnet.sex.cluster.rda")
 
@@ -116,7 +115,7 @@ rf.sex <- randomForest(
   ntree = 100000,
   keep.forest = FALSE
 )
-write.csv(confusionMatrix(rf.sex), file = "results/rf.sex.confusion.matrix.csv")
+write.csv(confusionMatrix(rf.sex), file = "results-raw/rf.sex.confusion.matrix.csv")
 
 # Random Forest social cluster classification
 data.cluster <- select(data.complete, -c(id, sex, decade)) %>% filter(!is.na(cluster.louvain))
@@ -132,7 +131,7 @@ rf.cluster <- randomForest(
   ntree = 100000,
   keep.forest = TRUE
 )
-write.csv(confusionMatrix(rf.cluster), file = "results/rf.cluster.confusion.matrix.csv")
+write.csv(confusionMatrix(rf.cluster), file = "results-raw/rf.cluster.confusion.matrix.csv")
 
 save(rf.cluster, rf.sex, file = "results/RF.sex.cluster.classification.rda")
 

@@ -4,7 +4,7 @@ library(viridis)
 
 # Age distribution of training data set
 p.age.distribution <- function(dat, min.CR){
-  ggplot(filter(dat, age.confidence >= min.cr), aes(x = age.best, fill = as.character(age.confidence))) +
+  ggplot(filter(dat, age.confidence >= min.CR), aes(x = age.best, fill = as.character(age.confidence))) +
     geom_histogram(bins = 35, binwidth = 1, color = "black") +
     scale_fill_manual(values = conf.palette, name = "Confidence") +
     labs(x = "Age.best", y = "Count") +
@@ -64,7 +64,7 @@ plot.loov.res <- function(loov.res, min.CR) {# expected argument is loov.res
     p.loov <- p.loov + 
       geom_abline(slope = filter(fit.sum, CR == cr)$slope, intercept = filter(fit.sum, CR == cr)$intercept, color = conf.palette[cr])
   }
-  return(p.loov)
+  return(list(p.loov = p.loov, fit.sum = fit.sum))
 }
 
 # Distribution of deviations for glmnet
