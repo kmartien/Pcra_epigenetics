@@ -3,22 +3,23 @@ library(tidyverse)
 library(ggplot2)
 library(gridExtra)
 source("R/functions/plotting.funcs.R")
-load("data/model.params.rda")
+#load("data/model.params.rda")
 load("data/color.palettes.rda")
 
 age.transform <- "ln"
-model <- 30
-params <- model.params[model,]
-description <- paste0("model", params$model, "-logit_mincov100")
+training.min.CR <- 4
+#model <- 30
+#params <- model.params[model,]
+#description <- paste0("model", params$model, "-logit_mincov100")
 
 dat <- list()
-load(paste0("results/glmnet.LOOV.plainjane-", age.transform, ".results.rda"))
+load(paste0("results/glmnet.LOOV.plainjane-", age.transform, "-minCR", training.min.CR, ".results.rda"))
 dat$ENR <- loov.res
-load(paste0("results/glmnet.LOOV.plainjane.alphaHalf-", age.transform, ".results.rda"))
+load(paste0("results/glmnet.LOOV.plainjane.alphaHalf-", age.transform, "-minCR", training.min.CR, ".results.rda"))
 dat$ENR0.5 <- loov.res
-load(paste0("results/rf.regression-plainjane-", age.transform, ".rda"))
+load(paste0("results/rf.regression-plainjane-", age.transform, "-minCR", training.min.CR, ".rda"))
 dat$RF <- rf.res
-load(paste0("results/svm.regression-plainjane-", age.transform, ".rda"))
+load(paste0("results/svm.regression-plainjane-", age.transform, "-minCR", training.min.CR, ".rda"))
 dat$SVM <- loov.age
 dat$SVM$age.best <- as.integer(dat$SVM$age.best)
 
@@ -31,7 +32,7 @@ plots <- lapply(1:length(dat), function(i){
 plots[[1]]$labels$title <- "ENR optimized alpha = 0.1"
 plots[[2]]$labels$title <- "ENR alpha = 0.5"
 plots$nrow <- 2
-jpeg(file = paste0("results-raw/plainjane.regression.plots-",age.transform,".jpg"), width = 1000, height = 800)
+jpeg(file = paste0("results-raw/plainjane.regression.plots-",age.transform, "-minCR", training.min.CR,".jpg"), width = 1000, height = 800)
 do.call(grid.arrange, plots[-2])
 dev.off()
 
@@ -64,7 +65,7 @@ MAE.by.age <- do.call(cbind, lapply(1:length(dat), function(i){
       group_by(age.confidence) %>% summarise(MAE = median(abs(error))) %>% bind_cols(age_bins = breaks[a])
   }))
 }))
-write.csv(MAE.by.age, file = paste0("results-raw/MAE.by.age.across.methods-", age.transform, ".csv"))
+write.csv(MAE.by.age, file = paste0("results-raw/MAE.by.age.across.methods-", age.transform, "-minCR", training.min.CR, ".csv"))
 
 # compare duplicates
 dupe.ids <- calibration.set.complete$crc.id[which(duplicated(calibration.set.complete$crc.id))]
@@ -85,7 +86,7 @@ pair.plot <- ggplot(dupe.sum) +
   labs(x = "Actual age difference", y = "Predicted age difference") +
   theme(text = element_text(size = 24)) +
   facet_wrap(~method, nrow = 2)
-jpeg(filename = paste0("results-raw/pair.plot-", age.transform, ".jpg"), width = 960, height = 960)
+jpeg(filename = paste0("results-raw/pair.plot-", age.transform, "-minCR", training.min.CR, ".jpg"), width = 960, height = 960)
 pair.plot
 dev.off()
 

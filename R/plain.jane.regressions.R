@@ -14,7 +14,7 @@ age.transform <- "ln" # "none" "ln" "sqrt"
 dat <- combine.age.and.meth.data(description)
 
 weight.type <- "none"
-training.min.CR <- 4
+training.min.CR <- 2
 
 site.names <- dat$site.names
 all.samples <- dat$all.samples
@@ -71,7 +71,7 @@ loov.res <- left_join(loov.res, select(calibration.set.complete, c(id,sex,age.co
 loov.error.sum <- c(mean = mean(abs(loov.res$error)), median = median(abs(loov.res$error)))
 
 save(test.alpha, calibration.set.complete, best.alpha, site.names,loov.res, loov.error.sum, 
-     file = paste0("results/glmnet.LOOV.plainjane-", age.transform, ".results.rda"))
+     file = paste0("results/glmnet.LOOV.plainjane-", age.transform, "-minCR", training.min.CR, ".results.rda"))
 
 # repeat loov with alpha = 0.5
 loov.res <- glmnet.loov(calibration.set.complete, site.names = site.names, alpha = 0.5)
@@ -79,7 +79,7 @@ loov.res <- left_join(loov.res, select(calibration.set.complete, c(id,sex,age.co
 loov.error.sum <- c(mean = mean(abs(loov.res$error)), median = median(abs(loov.res$error)))
 
 save(test.alpha, calibration.set.complete, best.alpha, site.names,loov.res, loov.error.sum, 
-     file = paste0("results/glmnet.LOOV.plainjane.alphaHalf-", age.transform, ".results.rda"))
+     file = paste0("results/glmnet.LOOV.plainjane.alphaHalf-", age.transform, "-minCR", training.min.CR, ".results.rda"))
 
 ################################################################################
 # Random Forest Regression
@@ -105,7 +105,7 @@ rf.res <- bind_cols(calibration.set.complete, predicted.age = rf.age$rf$predicte
   left_join(select(all.samples, c(id, sex, age.confidence))) %>% 
   mutate(error = predicted.age - age.best)
 
-save(rf.age, rf.res, file = paste0("results/rf.regression-plainjane-", age.transform, ".rda"))
+save(rf.age, rf.res, file = paste0("results/rf.regression-plainjane-", age.transform, "-minCR", training.min.CR, ".rda"))
 
 ################################################################################
 # SVM
@@ -136,5 +136,5 @@ loov.age <- left_join(loov.age, select(all.samples, c(id,sex,age.confidence, wt)
 
 loov.error.sum <- c(mean = mean(abs(loov.age$error)), median = median(abs(loov.age$error)))
 
-save(tune.obj, loov.age, file = paste0("results/svm.regression-plainjane-", age.transform, ".rda"))
+save(tune.obj, loov.age, file = paste0("results/svm.regression-plainjane-", age.transform, "-minCR", training.min.CR, ".rda"))
 
